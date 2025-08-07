@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Polytechnic Eligibility Checker</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 1rem;
+      background: #f9f9f9;
+      color: #333;
+    }
+    .container {
+      display: flex;
+      flex-direction: row;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+    .dropdowns {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      min-width: 250px;
+      flex: 1;
+    }
+    select {
+      padding: 0.5rem;
+      font-size: 1rem;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+    .results {
+      flex: 2;
+      overflow-y: auto;
+      max-height: 70vh;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+    th, td {
+      padding: 0.75rem;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+    }
+    th {
+      background: #f0f0f0;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    @media (max-width: 768px) {
+      .container {
+        flex-direction: column;
+      }
+      .results {
+        max-height: 50vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="dropdowns">
+      <select id="polySelect"><option>Loading Polytechnics...</option></select>
+      <select id="diplomaSelect"><option>Select Polytechnic First</option></select>
+      <select id="facultySelect"><option>Loading Faculties...</option></select>
+      <select id="programmeSelect"><option>Select Faculty First</option></select>
+    </div>
+
+    <div class="results" id="resultsContainer">
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th>No.</th>
+            <th>Faculty</th>
+            <th>Programme</th>
+            <th>Requirements</th>
+            <th>Website</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="5" style="text-align:center;">No results yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const API = 'https://script.google.com/macros/s/AKfycby5Fxt2D12qrKIfnqVjb0P8zWUepSz0LDIllXig0pkoBQUmr6V6TsxoEY9uCLV6435K/exec';
+
+    const polySelect = document.getElementById('polySelect');
+    const diplomaSelect = document.getElementById('diplomaSelect');
+    const facultySelect = document.getElementById('facultySelect');
+    const programmeSelect = document.getElementById('programmeSelect');
+    const resultsTable = document.getElementById('resultsTable').querySelector('tbody');
+
+    async function fetchData(action, params = {}) {
+      try {
+        const url = new URL(API);
+        url.searchParams.set('action', action);
+        Object.entries(params).forEach(([key, val]) => url.searchParams.set(key, val));
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        return await res.json();
+      } catch (err) {
+        console.error(`Error fetching ${action}:`, err);
+        alert("Something went wrong. Please try again.");
+        return [];
+      }
+    }
+
+    function populateDropdown(select, items, placeholder = 'Select...') {
+      select.innerHTML = `<option value="">${placeholder}</option>`;
+      items.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item;
+        opt.textContent = item;
+        select.appendChild(opt);
+      });
+    }
+
+    function clearTable(message = "No results yet") {
+      resultsTable.innerHTML = `<tr><td colspan="5" style="text-align:center;">${message}</td></tr>`;
+    }
+
+    function renderTable(data) {
+      if (!data.length) return clearTable("No matching results.");
+      resultsTable.innerHTML = '';
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.No}</td>
+          <td>${row.Faculty}</td>
+          <td>${row.Programme}</td>
+          <td>${row.Requirements}</td>
+          <td><a href="${row.Website}" target="_blank">Visit</a></td>
+        `;
+        resultsTable.appendChild(tr);
+      });
+    }
+
+    async function init() {
+      console.log("👋 Frontend script loaded");
+      const polys = await fetchData('getPolytechnic');
+      populateDropdown(polySelect, polys, 'Select Polytechnic');
+
+      const faculties = await fetchData('getFaculties');
+      populateDropdown(facultySelect, faculties, 'Select Faculty');
+    }
+
+    polySelect.addEventListener('change', async () => {
+      const poly = polySelect.value;
+      if (!poly) return populateDropdown(diplomaSelect, [], 'Select Polytechnic First');
+      const diplomas = await fetchData('getDiplomas', { polytechnic: poly });
+      populateDropdown(diplomaSelect, diplomas, 'Select Diploma');
+    });
+
+    facultySelect.addEventListener('change', async () => {
+      const faculty = facultySelect.value;
+      if (!faculty) return populateDropdown(programmeSelect, [], 'Select Faculty First');
+      const progs = await fetchData('getProgrammes', { faculty });
+      populateDropdown(programmeSelect, progs, 'Select Programme');
+    });
+
+    programmeSelect.addEventListener('change', async () => {
+      const poly = polySelect.value;
+      const faculty = facultySelect.value;
+      const prog = programmeSelect.value;
+
+      if (poly && faculty && prog) {
+        const results = await fetchData('checkEligibility', {
+          polytechnic: poly,
+          faculty: faculty,
+          programme: prog
+        });
+        renderTable(results);
+      } else {
+        clearTable("Please select all fields.");
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>
